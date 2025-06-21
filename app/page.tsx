@@ -5,6 +5,7 @@ import type { User } from "@supabase/supabase-js";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Button } from "@/components/ui/button";
+import { crudifyAndPush } from "@/lib/github";
 
 import {
   getAccessTokenFromSupabase,
@@ -32,8 +33,8 @@ export default function Home() {
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
   const [selectedFramework, setSelectedFramework] = useState("django");
   const [generatedCode, setGeneratedCode] = useState<{
-    serializers: string;
     views: string;
+    serializers: string;
     urls: string;
   } | null>(null);
 
@@ -64,6 +65,9 @@ export default function Home() {
   const signInWithGitHub = async () => {
     await supabase.auth.signInWithOAuth({
       provider: "github",
+      options: {
+        scopes: "repo user", // <--- THIS is what matters
+      },
     });
   };
   const signOut = async () => {
@@ -128,7 +132,17 @@ export default function Home() {
       const views = generateViews(modelNames);
       const urls = generateUrls(modelNames);
 
-      setGeneratedCode({ serializers, views, urls });
+      const code = { views, serializers, urls };
+      setGeneratedCode(code); // update state if you still want to show it somewhere later
+
+      const prUrl = await crudifyAndPush({
+        accessToken,
+        owner: userName,
+        repo: repoName,
+        generatedCode: code, // use the local variable instead of state
+      });
+
+      alert("Pull Request created: " + prUrl);
     } catch (e: any) {
       alert("Error: " + e.message);
     }
@@ -183,7 +197,7 @@ export default function Home() {
             </select>
           </div>
 
-          <Button onClick={crudify}>Generate CRUD Code</Button>
+          <Button onClick={crudify}>CRUDIFY</Button>
 
           {generatedCode && (
             <div className="mt-6">
