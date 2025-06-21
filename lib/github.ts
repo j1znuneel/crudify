@@ -91,11 +91,13 @@ export const crudifyAndPush = async ({
   owner,
   repo,
   generatedCode,
+  modelDir,
 }: {
   accessToken: string;
   owner: string;
   repo: string;
   generatedCode: { views: string; serializers: string; urls: string };
+  modelDir: string;
 }) => {
   const headers = {
     Authorization: `token ${accessToken}`,
@@ -103,7 +105,9 @@ export const crudifyAndPush = async ({
     "Content-Type": "application/json",
   };
 
-  const newBranchName = "crudify-generated";
+  const randomSuffix = Math.random().toString(36).substring(2, 6);
+  const newBranchName = `crudify-${randomSuffix}`;
+
   console.log(`Access token:${accessToken}`);
   console.log(`Owner:${owner}`);
   console.log(`Repo:${repo}`);
@@ -182,19 +186,19 @@ export const crudifyAndPush = async ({
         base_tree: baseTreeSha,
         tree: [
           {
-            path: "views.py",
+            path: `${modelDir}/views.py`,
             mode: "100644",
             type: "blob",
             sha: viewsSha,
           },
           {
-            path: "serializers.py",
+            path: `${modelDir}/serializers.py`,
             mode: "100644",
             type: "blob",
             sha: serializersSha,
           },
           {
-            path: "urls.py",
+            path: `${modelDir}/urls.py`,
             mode: "100644",
             type: "blob",
             sha: urlsSha,

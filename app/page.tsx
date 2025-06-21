@@ -21,6 +21,7 @@ import {
   generateViews,
   generateUrls,
 } from "@/lib/generator";
+import LandingPage from "@/components/custom/hero";
 
 type GitHubRepo = {
   id: number;
@@ -66,7 +67,7 @@ export default function Home() {
     await supabase.auth.signInWithOAuth({
       provider: "github",
       options: {
-        scopes: "repo user", // <--- THIS is what matters
+        scopes: "repo user", 
       },
     });
   };
@@ -107,6 +108,8 @@ export default function Home() {
       );
 
       const modelsPaths = findModelsPyPaths(tree);
+      const modelsPyPath = modelsPaths[0];
+      const modelDir = modelsPyPath.split("/").slice(0, -1).join("/"); 
 
       if (modelsPaths.length === 0) {
         alert("No models.py found in repo.");
@@ -117,7 +120,7 @@ export default function Home() {
       const modelsPyText = await fetchFileContent(
         userName,
         repoName,
-        modelsPaths[0],
+        modelsPyPath,
         accessToken
       );
 
@@ -140,6 +143,7 @@ export default function Home() {
         owner: userName,
         repo: repoName,
         generatedCode: code, // use the local variable instead of state
+        modelDir:modelDir
       });
 
       alert("Pull Request created: " + prUrl);
@@ -151,12 +155,13 @@ export default function Home() {
   return (
     <div className="flex justify-center items-center w-[100vw] h-[100vh] p-4">
       {!user ? (
-        <button
-          onClick={signInWithGitHub}
-          className="bg-green-600 px-4 py-2 rounded-md text-white shadow-[inset_0_-4px_4px_rgba(0,0,0,0.1)] transition-all duration-100 ease-in-out hover:bg-green-700"
-        >
-          Login with GitHub
-        </button>
+        // <button
+        //   onClick={signInWithGitHub}
+        //   className="bg-green-600 px-4 py-2 rounded-md text-white shadow-[inset_0_-4px_4px_rgba(0,0,0,0.1)] transition-all duration-100 ease-in-out hover:bg-green-700"
+        // >
+        //   Login with GitHub
+        // </button>
+        <LandingPage/>
       ) : (
         <div className="flex flex-col gap-4">
           <button
