@@ -13,6 +13,8 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -75,38 +77,44 @@ export default function Dashboard({ user }: Props) {
     urls: string;
   } | null>(null);
   const [githubUser, setGithubUser] = useState<GitHubUser | null>(null);
+  const [loadingRepos, setLoadingRepos] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [creatingPR, setCreatingPR] = useState(false);
 
   useEffect(() => {
+    if (user) toast.success(`Welcome ${user.email || "back"} 👋`);
+
     const fetchGitHubInfo = async () => {
-      const session = await supabase.auth.getSession();
-      const accessToken = session.data.session?.provider_token;
+      setLoadingRepos(true);
+      try {
+        const session = await supabase.auth.getSession();
+        const accessToken = session.data.session?.provider_token;
+        if (!accessToken) return;
 
-      if (!accessToken) return;
-
-      // Fetch GitHub profile
-      const userRes = await fetch("https://api.github.com/user", {
-        headers: {
-          Authorization: `token ${accessToken}`,
-        },
-      });
-
-      if (userRes.ok) {
-        const gitUser = await userRes.json();
-        setGithubUser({
-          login: gitUser.login,
-          name: gitUser.name || gitUser.login,
-          avatar_url: gitUser.avatar_url,
+        const userRes = await fetch("https://api.github.com/user", {
+          headers: { Authorization: `token ${accessToken}` },
         });
-      }
 
-      // Fetch GitHub repos
-      const reposRes = await fetch("https://api.github.com/user/repos", {
-        headers: {
-          Authorization: `token ${accessToken}`,
-        },
-      });
-      const reposData: GitHubRepo[] = await reposRes.json();
-      setRepos(reposData);
+        if (userRes.ok) {
+          const gitUser = await userRes.json();
+          setGithubUser({
+            login: gitUser.login,
+            name: gitUser.name || gitUser.login,
+            avatar_url: gitUser.avatar_url,
+          });
+        }
+
+        const reposRes = await fetch("https://api.github.com/user/repos", {
+          headers: { Authorization: `token ${accessToken}` },
+        });
+
+        const reposData: GitHubRepo[] = await reposRes.json();
+        setRepos(reposData);
+      } catch (err) {
+        toast.error("Failed to fetch GitHub info");
+      } finally {
+        setLoadingRepos(false);
+      }
     };
 
     fetchGitHubInfo();
@@ -114,14 +122,20 @@ export default function Dashboard({ user }: Props) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    toast.success("Signed out successfully.");
     window.location.reload();
   };
 
   const crudify = async () => {
-    if (!selectedRepo) return alert("Select a repo first!");
-    if (selectedFramework !== "django")
-      return alert("Currently, only Django is supported.");
-
+    if (!selectedRepo) {
+      toast.warning("Select a repo first!");
+      return;
+    }
+    if (selectedFramework !== "django") {
+      toast.warning("Currently, only Django is supported.");
+      return;
+    }
+    setGenerating(true);
     try {
       const accessToken = await getAccessTokenFromSupabase(supabase);
       const [userName, repoName] = selectedRepo.split("/");
@@ -140,7 +154,10 @@ export default function Dashboard({ user }: Props) {
       );
 
       const modelsPaths = findModelsPyPaths(tree);
-      if (modelsPaths.length === 0) return alert("No models.py found in repo.");
+      if (modelsPaths.length === 0) {
+        toast.error("No models.py found in the repo.");
+        return;
+      }
 
       const modelsPyPath = modelsPaths[0];
       const modelDir = modelsPyPath.split("/").slice(0, -1).join("/");
@@ -153,9 +170,10 @@ export default function Dashboard({ user }: Props) {
       );
 
       const modelNames = parseDjangoModels(modelsPyText);
-      if (modelNames.length === 0)
-        return alert("No Django models found in models.py");
-
+      if (modelNames.length === 0) {
+        toast.error("No Django models found in models.py");
+        return;
+      }
       const serializers = generateSerializers(modelNames);
       const views = generateViews(modelNames);
       const urls = generateUrls(modelNames);
@@ -163,15 +181,20 @@ export default function Dashboard({ user }: Props) {
       const code = { views, serializers, urls };
       setGeneratedCode(code);
       setModelDir(modelDir);
+      toast.success("Code generated successfully!");
     } catch (e: any) {
-      alert("Error: " + e.message);
+      toast.error("Error generating code", { description: e.message });
+    } finally {
+      setGenerating(false);
     }
   };
   const createPullRequest = async () => {
     if (!selectedRepo || !generatedCode || !modelDir) {
-      return alert("Missing repo, code, or model directory.");
+      toast.warning("Missing repo, code, or model directory.");
+      return;
     }
 
+    setCreatingPR(true);
     try {
       const accessToken = await getAccessTokenFromSupabase(supabase);
       const [userName, repoName] = selectedRepo.split("/");
@@ -184,9 +207,19 @@ export default function Dashboard({ user }: Props) {
         modelDir,
       });
 
-      alert("Pull Request created: " + prUrl);
+      toast.success("Pull Request created successfully!", {
+        description: prUrl,
+        action: {
+          label: "Open PR",
+          onClick: () => window.open(prUrl, "_blank"),
+        },
+      });
     } catch (e: any) {
-      alert("Error creating PR: " + e.message);
+      toast.error("Error creating PR", {
+        description: e.message,
+      });
+    } finally {
+      setCreatingPR(false);
     }
   };
 
@@ -253,7 +286,13 @@ export default function Dashboard({ user }: Props) {
                   onValueChange={setSelectedRepo}
                 >
                   <div className="space-y-3 max-h-[300px] overflow-auto">
-                    {repos.length === 0 ? (
+                    {loadingRepos ? (
+                      <>
+                        <Skeleton className="h-[50px] w-full rounded-xl"/>
+                        <Skeleton className="h-[50px] w-full rounded-xl"/>
+                        <Skeleton className="h-[50px] w-full rounded-xl"/>
+                      </>
+                    ) : repos.length === 0 ? (
                       <p className="text-muted-foreground text-sm">
                         No repos found or loading...
                       </p>
@@ -331,12 +370,21 @@ export default function Dashboard({ user }: Props) {
 
               <Button
                 onClick={crudify}
-                disabled={!selectedRepo || !selectedFramework}
+                disabled={!selectedRepo || !selectedFramework || generating}
                 size="lg"
                 className="w-full bg-amber-500 hover:bg-amber-600"
               >
-                <Code2 className="h-4 w-4 mr-2" />
-                CRUDIFY
+                {generating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Code2 className="h-4 w-4 mr-2" />
+                    CRUDIFY
+                  </>
+                )}
               </Button>
 
               {generatedCode && (
@@ -394,10 +442,20 @@ export default function Dashboard({ user }: Props) {
             <CardContent className="pt-2">
               <Button
                 onClick={createPullRequest}
+                disabled={creatingPR}
                 className="bg-amber-500 hover:bg-amber-600 w-full"
               >
-                <Code2 className="h-4 w-4 mr-2" />
-                Create Pull Request
+                {creatingPR ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Creating PR...
+                  </>
+                ) : (
+                  <>
+                    <Code2 className="h-4 w-4 mr-2" />
+                    Create Pull Request
+                  </>
+                )}
               </Button>
             </CardContent>
           </Card>
