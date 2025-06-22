@@ -67,6 +67,7 @@ type Props = {
 export default function Dashboard({ user }: Props) {
   const [repos, setRepos] = useState<GitHubRepo[]>([]);
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
+  const [modelDir, setModelDir] = useState<string | null>(null);
   const [selectedFramework, setSelectedFramework] = useState("django");
   const [generatedCode, setGeneratedCode] = useState<{
     views: string;
@@ -161,18 +162,31 @@ export default function Dashboard({ user }: Props) {
 
       const code = { views, serializers, urls };
       setGeneratedCode(code);
-
-        const prUrl = await crudifyAndPush({
-          accessToken,
-          owner: userName,
-          repo: repoName,
-          generatedCode: code,
-          modelDir: modelDir,
-        });
-
-        alert("Pull Request created: " + prUrl);
+      setModelDir(modelDir);
     } catch (e: any) {
       alert("Error: " + e.message);
+    }
+  };
+  const createPullRequest = async () => {
+    if (!selectedRepo || !generatedCode || !modelDir) {
+      return alert("Missing repo, code, or model directory.");
+    }
+
+    try {
+      const accessToken = await getAccessTokenFromSupabase(supabase);
+      const [userName, repoName] = selectedRepo.split("/");
+
+      const prUrl = await crudifyAndPush({
+        accessToken,
+        owner: userName,
+        repo: repoName,
+        generatedCode,
+        modelDir,
+      });
+
+      alert("Pull Request created: " + prUrl);
+    } catch (e: any) {
+      alert("Error creating PR: " + e.message);
     }
   };
 
@@ -376,6 +390,15 @@ export default function Dashboard({ user }: Props) {
                   </div>
                 </TabsContent>
               </Tabs>
+            </CardContent>
+            <CardContent className="pt-2">
+              <Button
+                onClick={createPullRequest}
+                className="bg-amber-500 hover:bg-amber-600 w-full"
+              >
+                <Code2 className="h-4 w-4 mr-2" />
+                Create Pull Request
+              </Button>
             </CardContent>
           </Card>
         )}
